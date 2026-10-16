@@ -102,7 +102,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="fr">
       <head>
         <HeadContent />
       </head>
@@ -116,11 +116,35 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const navCls = "px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-heading";
+  const active = { className: "px-3 py-1.5 rounded-md text-sm bg-primary-soft text-primary font-medium" };
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <div className="min-h-screen flex flex-col">
+        <header className="border-b bg-card">
+          <div className="mx-auto max-w-[1400px] px-4 h-14 flex items-center gap-6">
+            <Link to="/" className="flex items-center gap-2">
+              <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden className="text-primary">
+                <path d="M3 20 L3 8 L23 8 L23 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+              </svg>
+              <span className="text-lg font-bold text-heading tracking-tight">Pli</span>
+            </Link>
+            <nav className="flex gap-1">
+              <Link to="/" className={navCls} activeProps={active} activeOptions={{ exact: true }}>
+                Profil
+              </Link>
+              <Link to="/pertes" className={navCls} activeProps={active}>
+                Table des pertes
+              </Link>
+            </nav>
+          </div>
+        </header>
+        <main className="flex-1">
+          <Outlet />
+        </main>
+        <footer className="py-6 text-center text-xs text-muted-foreground">Conçu par H. N.</footer>
+      </div>
     </QueryClientProvider>
   );
 }

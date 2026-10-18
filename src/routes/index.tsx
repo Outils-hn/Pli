@@ -227,7 +227,7 @@ function Editor() {
             </table>
           </div>
           <button className="btn btn-primary mt-3" onClick={addEnd}>+ Ajouter un pli</button>
-          <p className="mt-2 text-xs text-muted-foreground">Angle de pliage : 90° = équerre, 180° = ourlet. Cotes : jusqu'à l'intersection des faces pour un pli ouvert (≤ 90°), jusqu'au bord de la tôle pour un pli fermé (> 90°). Le sens est vu en parcourant le profil depuis le segment 1.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Angle de pliage : 90° = équerre, 180° = ourlet. Cotes : jusqu'à l'intersection des faces pour un pli ouvert (≤ 90°), jusqu'au bord de la tôle pour un pli fermé (plus de 90°). Le sens est vu en parcourant le profil depuis le segment 1.</p>
         </section>
 
         {/* Aperçu */}

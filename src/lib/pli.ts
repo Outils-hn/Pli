@@ -68,12 +68,21 @@ export function kFromLoss90(loss90: number, e: number) {
   return ((2 * ossb(90, r, e) - loss90) / (Math.PI / 2) - r) / e;
 }
 
+/**
+ * L'atelier parle en ANGLE INTERIEUR (90 = equerre, 135 = pli ouvert, 0 = ourlet).
+ * En interne, Pli calcule avec l'angle de PLIAGE (deviation : 0 = pas de pli,
+ * 90 = equerre, 180 = ourlet). Conversion dans les deux sens : interieur = 180 - pliage.
+ */
+export const toInterior = (bendAngle: number) => 180 - bendAngle;
+export const fromInterior = (interior: number) => 180 - interior;
+
 const eq = (a: number, b: number) => Math.abs(a - b) < 1e-6;
 const norm = (s: string) => s.trim().toLowerCase();
 
 export function findLoss(table: LossRow[], material: string, e: number, angle: number) {
   return table.find(
-    (r) => norm(r.material) === norm(material) && eq(r.thickness, e) && eq(r.angle ?? 90, angle),
+    // r.angle est saisi en angle INTERIEUR dans la table (vide = 90°) ; angle = angle de pliage
+    (r) => norm(r.material) === norm(material) && eq(r.thickness, e) && eq(fromInterior(r.angle ?? 90), angle),
   );
 }
 
@@ -88,7 +97,7 @@ export function compute(p: Profile, table: LossRow[]): CalcResult {
   const angles = p.items.slice(0, n - 1).map((it) => it.angle);
   for (const a of angles) {
     if (a < 0 || a > 180)
-      return { ok: false, error: `Angle ${a}° hors plage (0 à 180°).`, ...empty };
+      return { ok: false, error: `Angle intérieur ${fmt(toInterior(a))}° hors plage (0 à 180°).`, ...empty };
   }
 
   const r = p.method === "k" ? p.radius : e;
@@ -121,7 +130,7 @@ export function compute(p: Profile, table: LossRow[]): CalcResult {
       // une perte negative), on exige une vraie valeur d'atelier
       return {
         ok: false,
-        error: `Pas de perte pour un ourlet (180°) en ${p.material} ${fmt(e)} mm. Ajoutez cette valeur dans la table des pertes (angle 180).`,
+        error: `Pas de perte pour un ourlet en ${p.material} ${fmt(e)} mm. Ajoutez cette valeur dans la table des pertes (angle intérieur 0).`,
         ...empty,
       };
     }

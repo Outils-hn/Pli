@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compute, newProfile, parseNum, fmtExcel, round05, kFromLoss90, lossFromK, polylineToItems } from "./pli";
+import { compute, newProfile, parseNum, fmtExcel, toInterior, fromInterior, round05, kFromLoss90, lossFromK, polylineToItems } from "./pli";
 
 const table = [{ material: "Alu", thickness: 2, angle: null, loss: 3.5 }];
 
@@ -80,11 +80,24 @@ describe("pli", () => {
     const r = compute(p, table);
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/ourlet/);
-    const r2 = compute(p, [...table, { material: "Alu", thickness: 2, angle: 180, loss: 1 }]);
+    const r2 = compute(p, [...table, { material: "Alu", thickness: 2, angle: 0, loss: 1 }]);
     expect(r2.ok).toBe(true);
   });
   it("copie Excel sans séparateur de milliers", () => {
     expect(fmtExcel(1234.5, 1)).toBe("1234,5");
     expect(fmtExcel(423)).toBe("423");
+  });
+  // L'atelier parle en angle interieur : 135° interieur = 45° de pliage, 0° = ourlet
+  it("conversion angle intérieur <-> angle de pliage", () => {
+    expect(toInterior(90)).toBe(90);
+    expect(toInterior(45)).toBe(135);
+    expect(fromInterior(0)).toBe(180);
+  });
+  it("table des pertes en angle intérieur : 135 correspond à un pliage de 45°", () => {
+    const p = newProfile();
+    p.items[0].angle = 45; // pli ouvert, 135° interieur
+    const r = compute(p, [...table, { material: "Alu", thickness: 2, angle: 135, loss: 1.2 }]);
+    expect(r.bends[0].source).toBe("table");
+    expect(r.bends[0].loss).toBe(1.2);
   });
 });

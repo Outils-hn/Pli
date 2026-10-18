@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { NumInput } from "@/components/NumInput";
 import { FlatSvg, ProfileSvg } from "@/components/Drawings";
 import {
-  compute, DEFAULT_MATERIALS, DEFAULT_TABLE, fmt, fmtExcel, newProfile, uid,
+  compute, DEFAULT_MATERIALS, DEFAULT_TABLE, fmt, fmtExcel, newProfile, toInterior, fromInterior, uid,
   type Item, type LossRow, type Profile,
 } from "@/lib/pli";
 import { dxfToItems } from "@/lib/dxf";
@@ -92,9 +92,9 @@ function Editor() {
       `Méthode\t${p.method === "perte" ? "Pertes au pli" : `Facteur K = ${fmtExcel(p.k)}, R int = ${fmtExcel(p.radius)} mm`}`,
       `Largeur de flan (mm)\t${fmtExcel(r.totalRounded, 1)}\tcalculé\t${fmtExcel(r.total, 3)}`,
       "",
-      "Pli\tAngle (°)\tSens\tPosition depuis bord gauche (mm)\tPerte (mm)",
+      "Pli\tAngle intérieur (°)\tSens\tPosition depuis bord gauche (mm)\tPerte (mm)",
       ...r.bends.filter((b) => b.angle > 0).map((b) =>
-        `${b.index + 1}\t${fmtExcel(b.angle, 1)}\t${b.dir === "G" ? "haut" : "bas"}\t${fmtExcel(b.position, 1)}\t${fmtExcel(b.loss)}`),
+        `${b.index + 1}\t${fmtExcel(toInterior(b.angle), 1)}\t${b.dir === "G" ? "haut" : "bas"}\t${fmtExcel(b.position, 1)}\t${fmtExcel(b.loss)}`),
     ];
     await navigator.clipboard.writeText(lines.join("\n"));
     setNotice({ kind: "ok", text: "Résultats copiés." });
@@ -191,7 +191,7 @@ function Editor() {
                 <tr>
                   <th className="text-left font-medium pb-2 w-10">Seg.</th>
                   <th className="text-right font-medium pb-2">Longueur (mm)</th>
-                  <th className="text-right font-medium pb-2" title="Angle de pliage : 90 = équerre, 45 = pli ouvert à 135° intérieur, 180 = ourlet">Angle de pliage (°)</th>
+                  <th className="text-right font-medium pb-2" title="Angle intérieur, comme à l'atelier : 90 = équerre, 135 = pli ouvert, 0 = ourlet, 180 = pas de pli">Angle intérieur (°)</th>
                   <th className="text-left font-medium pb-2 pl-2">Sens</th>
                   <th />
                 </tr>
@@ -207,7 +207,7 @@ function Editor() {
                     <td className="py-1.5 font-mono text-muted-foreground">{i + 1}</td>
                     <td className="py-1.5 pr-2"><NumInput value={it.length} onChange={(v) => setItem(i, { length: v ?? 0 })} aria-label={`Longueur segment ${i + 1}`} /></td>
                     <td className="py-1.5 pr-2">
-                      {i < n - 1 ? <NumInput value={it.angle} onChange={(v) => setItem(i, { angle: v ?? 0 })} aria-label={`Angle pli ${i + 1}`} /> : <span className="block text-right text-muted-foreground">—</span>}
+                      {i < n - 1 ? <NumInput value={toInterior(it.angle)} onChange={(v) => setItem(i, { angle: fromInterior(v ?? 180) })} aria-label={`Angle intérieur pli ${i + 1}`} /> : <span className="block text-right text-muted-foreground">—</span>}
                     </td>
                     <td className="py-1.5 pl-2">
                       {i < n - 1 && (
@@ -227,7 +227,7 @@ function Editor() {
             </table>
           </div>
           <button className="btn btn-primary mt-3" onClick={addEnd}>+ Ajouter un pli</button>
-          <p className="mt-2 text-xs text-muted-foreground">Angle de pliage : 90° = équerre, 180° = ourlet. Cotes : jusqu'à l'intersection des faces pour un pli ouvert (≤ 90°), jusqu'au bord de la tôle pour un pli fermé (plus de 90°). Le sens est vu en parcourant le profil depuis le segment 1.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Angle intérieur : 90° = équerre, 135° = pli ouvert, 0° = ourlet. Cotes : jusqu'à l'intersection des faces pour un pli ouvert (90° ou plus), jusqu'au bord de la tôle pour un pli fermé (moins de 90°). Le sens est vu en parcourant le profil depuis le segment 1.</p>
         </section>
 
         {/* Aperçu */}
@@ -270,13 +270,13 @@ function Editor() {
 
               <table className="w-full text-sm mt-5">
                 <thead className="text-xs text-muted-foreground">
-                  <tr><th className="text-left font-medium pb-1">Pli</th><th className="text-right font-medium pb-1">Angle</th><th className="text-right font-medium pb-1">Sens</th><th className="text-right font-medium pb-1">Traçage</th></tr>
+                  <tr><th className="text-left font-medium pb-1">Pli</th><th className="text-right font-medium pb-1">Angle int.</th><th className="text-right font-medium pb-1">Sens</th><th className="text-right font-medium pb-1">Traçage</th></tr>
                 </thead>
                 <tbody>
                   {r.bends.filter((b) => b.angle > 0).map((b) => (
                     <tr key={b.index} className="border-t">
                       <td className="py-1 font-mono">{b.index + 1}</td>
-                      <td className="py-1 num">{fmt(b.angle, 1)}°</td>
+                      <td className="py-1 num">{fmt(toInterior(b.angle), 1)}°</td>
                       <td className="py-1 text-right">{b.dir === "G" ? "haut" : "bas"}</td>
                       <td className="py-1 num font-medium text-heading">{fmt(b.position, 1)}</td>
                     </tr>
@@ -300,7 +300,7 @@ function Editor() {
                   <li>{p.material}, épaisseur {fmt(p.thickness)} mm — cotes {p.coteMode === "ext" ? "extérieures" : "intérieures (converties en extérieures)"}</li>
                   {r.bends.filter((b) => b.angle > 0).map((b) => (
                     <li key={b.index}>
-                      Pli {b.index + 1} ({fmt(b.angle, 1)}°) : perte <span className="font-mono">{fmt(b.loss, 3)}</span> mm
+                      Pli {b.index + 1} ({fmt(toInterior(b.angle), 1)}° int.) : perte <span className="font-mono">{fmt(b.loss, 3)}</span> mm
                       {b.source === "table" && " — table"}
                       {b.source === "k" && " — calculée (K)"}
                       {b.source === "extrapolee" && <span className="text-warning"> — valeur extrapolée depuis 90°</span>}

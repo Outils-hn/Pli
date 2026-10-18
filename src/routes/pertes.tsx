@@ -29,7 +29,7 @@ function Pertes() {
   const doPaste = (replace: boolean) => {
     const { rows, errors } = parseLossTable(paste);
     if (!rows.length) {
-      setMsg("Aucune ligne lisible. Format attendu : matériau, épaisseur, angle (optionnel), perte.");
+      setMsg("Aucune ligne lisible. Format attendu : matériau, épaisseur, angle intérieur (optionnel), perte.");
       return;
     }
     setTable((t) => (replace ? rows : [...t, ...rows]));
@@ -46,7 +46,7 @@ function Pertes() {
             <tr>
               <th className="text-left font-medium pb-2">Matériau</th>
               <th className="text-right font-medium pb-2">Épaisseur (mm)</th>
-              <th className="text-right font-medium pb-2">Angle (°)</th>
+              <th className="text-right font-medium pb-2" title="Angle intérieur : vide = 90, 135 = pli ouvert, 0 = ourlet">Angle int. (°)</th>
               <th className="text-right font-medium pb-2">Perte (mm)</th>
               <th />
             </tr>
@@ -72,7 +72,7 @@ function Pertes() {
           <button className="btn" onClick={() => setTable((t) => [...t, { material: materials[0] ?? "", thickness: 1, angle: null, loss: 0 }])}>+ Ajouter une ligne</button>
           <button className="btn" onClick={() => confirm("Remettre la table par défaut ?") && setTable(DEFAULT_TABLE)}>Valeurs par défaut</button>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Angle vide = 90°. Les valeurs par défaut sont indicatives : remplacez-les par celles de votre atelier.</p>
+        <p className="mt-3 text-xs text-muted-foreground">Angles en angle intérieur, comme à l'atelier : vide = 90°, 135 = pli ouvert, 0 = ourlet. Les valeurs par défaut sont indicatives : remplacez-les par celles de votre atelier.</p>
       </section>
 
       <div className="grid gap-5 content-start">

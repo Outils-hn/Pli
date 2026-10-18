@@ -72,7 +72,7 @@ export function FlatSvg({ total, bends }: { total: number; bends: BendResult[] }
         <g key={b.index}>
           <line x1={b.position} y1={0} x2={b.position} y2={H} className="stroke-primary" strokeWidth={1.5} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
           <text x={b.position} y={H + fs * 1.4} fontSize={fs * 0.9} textAnchor="middle" className="fill-heading font-mono">
-            {b.dir === "G" ? "↑" : "↓"} {fmt(b.angle, 1)}°
+            {b.dir === "G" ? "↑" : "↓"} {fmt(180 - b.angle, 1)}°
           </text>
           <text x={b.position} y={H + fs * 2.6} fontSize={fs * 0.75} textAnchor="middle" className="fill-muted-foreground">
             {b.dir === "G" ? "haut" : "bas"}

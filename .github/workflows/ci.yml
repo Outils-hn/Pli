@@ -1,0 +1,40 @@
+# Verification automatique : a chaque envoi de code, GitHub lance les tests,
+# le controle TypeScript et la construction de l'appli. Une croix rouge dans
+# GitHub = quelque chose est casse, a ne pas fusionner.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # bun.lock pointe en partie vers le cache prive de Lovable : on installe
+      # depuis le registre npm public, sans utiliser ce fichier.
+      - name: Installer les dependances
+        run: |
+          set -o pipefail
+          if ! npm install --no-package-lock --no-audit --no-fund --legacy-peer-deps 2>&1 | tee install.log; then
+            # Fait remonter la fin du journal en annotations, lisibles sans telecharger les logs
+            tail -n 15 install.log | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          fi
+      - name: Tests
+        run: |
+          set -o pipefail
+          npx vitest run 2>&1 | tee step.log || { grep -E "FAIL|Error|expected|✗|×" step.log | head -n 20 | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
+      - name: Controle TypeScript
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee step.log || { head -n 20 step.log | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
+      - name: Construction
+        run: |
+          set -o pipefail
+          npx vite build 2>&1 | tee step.log || { tail -n 20 step.log | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }

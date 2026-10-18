@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { NumInput } from "@/components/NumInput";
 import { FlatSvg, ProfileSvg } from "@/components/Drawings";
 import {
-  compute, DEFAULT_MATERIALS, DEFAULT_TABLE, fmt, newProfile, uid,
+  compute, DEFAULT_MATERIALS, DEFAULT_TABLE, fmt, fmtExcel, newProfile, uid,
   type Item, type LossRow, type Profile,
 } from "@/lib/pli";
 import { dxfToItems } from "@/lib/dxf";
@@ -87,14 +87,14 @@ function Editor() {
   const copy = async () => {
     const lines = [
       `${p.name}`,
-      `Matériau\t${p.material}\tÉpaisseur\t${fmt(p.thickness)} mm`,
+      `Matériau\t${p.material}\tÉpaisseur (mm)\t${fmtExcel(p.thickness)}`,
       `Cotes\t${p.coteMode === "ext" ? "extérieures" : "intérieures"}`,
-      `Méthode\t${p.method === "perte" ? "Pertes au pli" : `Facteur K = ${fmt(p.k)}, R int = ${fmt(p.radius)} mm`}`,
-      `Largeur de flan\t${fmt(r.totalRounded, 1)} mm\t(${fmt(r.total)} calculé)`,
+      `Méthode\t${p.method === "perte" ? "Pertes au pli" : `Facteur K = ${fmtExcel(p.k)}, R int = ${fmtExcel(p.radius)} mm`}`,
+      `Largeur de flan (mm)\t${fmtExcel(r.totalRounded, 1)}\tcalculé\t${fmtExcel(r.total, 3)}`,
       "",
-      "Pli\tAngle\tSens\tPosition depuis bord gauche (mm)\tPerte (mm)",
+      "Pli\tAngle (°)\tSens\tPosition depuis bord gauche (mm)\tPerte (mm)",
       ...r.bends.filter((b) => b.angle > 0).map((b) =>
-        `${b.index + 1}\t${fmt(b.angle, 1)}°\t${b.dir === "G" ? "haut" : "bas"}\t${fmt(b.position, 1)}\t${fmt(b.loss)}`),
+        `${b.index + 1}\t${fmtExcel(b.angle, 1)}\t${b.dir === "G" ? "haut" : "bas"}\t${fmtExcel(b.position, 1)}\t${fmtExcel(b.loss)}`),
     ];
     await navigator.clipboard.writeText(lines.join("\n"));
     setNotice({ kind: "ok", text: "Résultats copiés." });
@@ -148,7 +148,8 @@ function Editor() {
       {dxfItems && (
         <div className="card border-primary">
           <h2 className="card-title">Import DXF — {dxfItems.length} segment(s) détecté(s)</h2>
-          <p className="text-sm mb-3">La ligne dessinée représente quelle face de la tôle ?</p>
+          <p className="text-sm mb-1">La ligne dessinée représente quelle face de la tôle ?</p>
+          <p className="text-xs text-muted-foreground mb-3">Les congés sont convertis selon la règle de l'atelier : intersection des faces pour un pli ouvert, bord de la tôle pour un pli fermé.</p>
           <div className="flex gap-2">
             {(["ext", "int"] as const).map((m) => (
               <button key={m} className="btn btn-primary" onClick={() => { setP((x) => ({ ...x, items: dxfItems, coteMode: m })); setDxfItems(null); setSel(null); }}>
@@ -190,7 +191,7 @@ function Editor() {
                 <tr>
                   <th className="text-left font-medium pb-2 w-10">Seg.</th>
                   <th className="text-right font-medium pb-2">Longueur (mm)</th>
-                  <th className="text-right font-medium pb-2">Pli (°)</th>
+                  <th className="text-right font-medium pb-2" title="Angle de pliage : 90 = équerre, 45 = pli ouvert à 135° intérieur, 180 = ourlet">Angle de pliage (°)</th>
                   <th className="text-left font-medium pb-2 pl-2">Sens</th>
                   <th />
                 </tr>
@@ -226,7 +227,7 @@ function Editor() {
             </table>
           </div>
           <button className="btn btn-primary mt-3" onClick={addEnd}>+ Ajouter un pli</button>
-          <p className="mt-2 text-xs text-muted-foreground">90° = équerre, 180° = ourlet. Le sens est vu en parcourant le profil depuis le segment 1.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Angle de pliage : 90° = équerre, 180° = ourlet. Cotes : jusqu'à l'intersection des faces pour un pli ouvert (≤ 90°), jusqu'au bord de la tôle pour un pli fermé (plus de 90°). Le sens est vu en parcourant le profil depuis le segment 1.</p>
         </section>
 
         {/* Aperçu */}

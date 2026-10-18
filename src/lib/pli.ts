@@ -116,6 +116,15 @@ export function compute(p: Profile, table: LossRow[]): CalcResult {
       losses.push({ loss: exact.loss, source: "table" });
       continue;
     }
+    if (a >= 180) {
+      // Ourlet : l'extrapolation depuis 90° n'est pas fiable (elle peut meme donner
+      // une perte negative), on exige une vraie valeur d'atelier
+      return {
+        ok: false,
+        error: `Pas de perte pour un ourlet (180°) en ${p.material} ${fmt(e)} mm. Ajoutez cette valeur dans la table des pertes (angle 180).`,
+        ...empty,
+      };
+    }
     const at90 = findLoss(table, p.material, e, 90);
     if (!at90) {
       return {
@@ -157,6 +166,11 @@ export function compute(p: Profile, table: LossRow[]): CalcResult {
 
 export function fmt(x: number, d = 2) {
   return Number(x.toFixed(d)).toLocaleString("fr-FR", { maximumFractionDigits: d });
+}
+
+/** Nombre pour Excel : virgule decimale, SANS separateur de milliers (sinon Excel le lit comme du texte). */
+export function fmtExcel(x: number, d = 2) {
+  return String(Number(x.toFixed(d))).replace(".", ",");
 }
 
 /** Nombre saisi façon Excel : virgule ou point, apostrophe suisse, espaces */
@@ -206,46 +220,66 @@ export function profilePoints(items: Item[]) {
   return pts;
 }
 
-/** Conversion d'une polyligne (sommets + bulges) en segments + plis */
+/**
+ * Conversion d'une polyligne (sommets + bulges) en segments + plis, selon la regle
+ * de cotation de l'atelier :
+ *  - pli ouvert (<= 90°) : cote jusqu'a l'INTERSECTION des faces ;
+ *  - pli ferme (> 90°, ourlet compris) : cote jusqu'au BORD de la tole.
+ * Un pli dessine avec un arc (conge) ajoute donc a chaque segment voisin
+ * R x tan(angle/2) s'il est ouvert, ou seulement R s'il est ferme (R = rayon de
+ * l'arc, donc de la face dessinee). Un coin vif n'ajoute rien : le coin dessine
+ * est a la fois l'intersection et le bord.
+ */
 export function polylineToItems(verts: { x: number; y: number; bulge?: number }[]): Item[] {
-  const sharp: { x: number; y: number }[] = [];
-  for (let i = 0; i < verts.length; i++) {
-    const v = verts[i];
-    const prevBulge = i > 0 ? verts[i - 1].bulge ?? 0 : 0;
+  type Seg = { x1: number; y1: number; x2: number; y2: number };
+  type Join = { angle: number; dir: Dir; allowance: number };
+  const segs: Seg[] = [];
+  const joins: Join[] = []; // joins[k] relie segs[k] et segs[k+1]
+  let pendingArc: Join | null = null;
+
+  for (let i = 0; i < verts.length - 1; i++) {
+    const v = verts[i]!;
+    const w = verts[i + 1]!;
     const b = v.bulge ?? 0;
-    const hasArc = b !== 0 && i < verts.length - 1 && i > 0 && i < verts.length - 2;
-    const prevArc = prevBulge !== 0 && i - 1 > 0 && i < verts.length - 1;
-    if (prevArc) continue;
-    if (hasArc) {
-      const w = verts[i + 1];
-      const dx = w.x - v.x;
-      const dy = w.y - v.y;
-      const c = Math.hypot(dx, dy);
+    if (b !== 0) {
+      // Arc entre v et w : angle au centre = deviation du pli
+      if (segs.length === 0) throw new Error("Le profil commence par un arc : il doit commencer et finir par un segment droit.");
+      if (pendingArc) throw new Error("Deux arcs se suivent : chaque pli doit être un seul arc entre deux segments droits.");
       const th = 4 * Math.atan(Math.abs(b));
-      const dist = (c / 2) * Math.tan(th / 2);
-      const s = b > 0 ? 1 : -1;
-      sharp.push({ x: (v.x + w.x) / 2 + (s * dy * dist) / c, y: (v.y + w.y) / 2 - (s * dx * dist) / c });
-    } else sharp.push({ x: v.x, y: v.y });
-  }
-  const items: Item[] = [];
-  for (let i = 0; i < sharp.length - 1; i++) {
-    const a = sharp[i];
-    const b = sharp[i + 1];
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    let angle = 0;
-    let dir: Dir = "G";
-    if (i < sharp.length - 2) {
-      const c = sharp[i + 2];
-      const u = { x: b.x - a.x, y: b.y - a.y };
-      const w = { x: c.x - b.x, y: c.y - b.y };
-      const cross = u.x * w.y - u.y * w.x;
-      const dot = u.x * w.x + u.y * w.y;
-      angle = Math.round(((Math.abs(Math.atan2(cross, dot)) * 180) / Math.PI) * 10) / 10;
-      dir = cross >= 0 ? "G" : "D";
+      const c = Math.hypot(w.x - v.x, w.y - v.y);
+      const R = c / (2 * Math.sin(th / 2));
+      const deg = (th * 180) / Math.PI;
+      const allowance = deg <= 90 + 1e-6 ? R * Math.tan(th / 2) : R;
+      pendingArc = { angle: Math.round(deg * 10) / 10, dir: b > 0 ? "G" : "D", allowance };
+      continue;
     }
-    items.push({ id: uid(), length: Math.round(len * 100) / 100, angle, dir });
+    const seg = { x1: v.x, y1: v.y, x2: w.x, y2: w.y };
+    if (Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1) < 1e-6) continue;
+    if (segs.length > 0) {
+      if (pendingArc) joins.push(pendingArc);
+      else {
+        // Coin vif : angle entre les deux directions
+        const prev = segs[segs.length - 1]!;
+        const u = { x: prev.x2 - prev.x1, y: prev.y2 - prev.y1 };
+        const t = { x: seg.x2 - seg.x1, y: seg.y2 - seg.y1 };
+        const cross = u.x * t.y - u.y * t.x;
+        const dot = u.x * t.x + u.y * t.y;
+        const deg = (Math.abs(Math.atan2(cross, dot)) * 180) / Math.PI;
+        joins.push({ angle: Math.round(deg * 10) / 10, dir: cross >= 0 ? "G" : "D", allowance: 0 });
+      }
+    }
+    pendingArc = null;
+    segs.push(seg);
   }
-  return items.filter((it) => it.length > 1e-6);
+  if (pendingArc) throw new Error("Le profil finit par un arc : il doit commencer et finir par un segment droit.");
+
+  return segs.map((sg, k) => {
+    let len = Math.hypot(sg.x2 - sg.x1, sg.y2 - sg.y1);
+    if (k > 0) len += joins[k - 1]!.allowance;
+    if (k < segs.length - 1) len += joins[k]!.allowance;
+    const j = joins[k];
+    return { id: uid(), length: Math.round(len * 100) / 100, angle: j ? j.angle : 0, dir: j ? j.dir : "G" };
+  });
 }
 
 export const DEFAULT_MATERIALS = ["Alu", "Acier", "Inox", "Zinc", "Cuivre"];
